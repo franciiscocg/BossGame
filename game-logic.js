@@ -89,13 +89,21 @@ function gameLoop() {
     // Actualizar balas del jugador
     window.player.bullets = window.player.bullets.filter(bullet => {
         bullet.update();
-        return !bullet.isDead;
+        return !bullet.isDead; // isDead es una propiedad, no un método
     });
 
-    // Actualizar balas del enemigo
+    // Actualizar balas del enemigo y verificar colisiones con el jugador
     window.enemy.bullets = window.enemy.bullets.filter(bullet => {
         bullet.update();
-        return !bullet.isDead;
+        
+        // Verificar colisión con el jugador
+        if (bullet.checkHit(window.player)) {
+            window.player.takeDamage(bullet.damage);
+            addLogEntry(`¡Golpe recibido! -${bullet.damage} de vida`, 'damage');
+            return false; // Eliminar la bala
+        }
+        
+        return !bullet.isDead; // isDead es una propiedad, no un método
     });
 
     window.player.update();
@@ -109,20 +117,39 @@ function gameLoop() {
 
     window.enemy.update();
     
+    // Mover en X
     if (window.enemy.x < window.player.x) window.enemy.moveRight();
     else if (window.enemy.x > window.player.x) window.enemy.moveLeft();
+
+    // Mover en Y
+    if (window.enemy.y < window.player.y) window.enemy.moveDown();
+    else if (window.enemy.y > window.player.y) window.enemy.moveUp();
     
-    if (frameCount % 120 === 0) {
+    // Disparar cada 2 segundos (120 frames)
+    console.log('Frame:', frameCount, 'Último disparo:', window.enemyLastShot, 'Diferencia:', frameCount - window.enemyLastShot);
+    if (frameCount - window.enemyLastShot >= 60) {  // Reducido a 1 segundo para pruebas
         // El enemigo dispara una bala hacia la última posición del jugador
+        // Calcular la posición objetivo absoluta
+        const targetX = window.player.x + window.player.width/2;
+        const targetY = window.player.y + window.player.height/2;
+        
         const bullet = new Bullet(
             window.enemy.x + window.enemy.width/2, 
             window.enemy.y + window.enemy.height/2, 
-            window.player.lastAttackX || window.player.x + window.player.width/2, 
-            window.player.lastAttackY || window.player.y + window.player.height/2, 
+            targetX, 
+            targetY, 
             3, 
-            '#ff0000'
+            '#ff3366',  // Color rosa brillante
+            'enemy'    // Indicar que la bala es del enemigo
+        );
+        
+        console.log('Disparo enemigo - Desde:', 
+            {x: window.enemy.x + window.enemy.width/2, y: window.enemy.y + window.enemy.height/2}, 
+            'Hacia:', {x: targetX, y: targetY}
         );
         window.enemy.bullets.push(bullet);
+        window.enemyLastShot = frameCount;  // Actualizar el tiempo del último disparo
+        console.log('Enemigo dispara a:', window.lastPlayerX, window.lastPlayerY, 'Balas:', window.enemy.bullets.length);
         
         if (checkCollision(window.enemy, window.player)) {
             if (!window.player.isDefending) {
@@ -130,7 +157,6 @@ function gameLoop() {
                 window.player.combo = 0;
                 window.player.isInvulnerable = true;
                 window.player.invulnerabilityFrames = 30;
-                window.player.createParticles(window.player.x + window.player.width/2, window.player.y + window.player.height/2, '#ff0000');
             }
         }
     }
@@ -139,9 +165,19 @@ function gameLoop() {
         window.player.sword = null;
     }
 
-    window.player.bullets.forEach(bullet => bullet.draw(window.ctx));
-    window.enemy.bullets.forEach(bullet => bullet.draw(window.ctx));
+    // Dibujar balas del jugador
+    window.player.bullets.forEach(bullet => {
+        console.log('Dibujando bala del jugador en:', bullet.x, bullet.y);
+        bullet.draw(window.ctx);
+    });
 
+    // Dibujar balas del enemigo
+    window.enemy.bullets.forEach(bullet => {
+        console.log('Dibujando bala del enemigo en:', bullet.x, bullet.y);
+        bullet.draw(window.ctx);
+    });
+
+    // Dibujar personajes
     window.player.draw(window.ctx);
     window.enemy.draw(window.ctx);
 

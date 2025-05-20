@@ -53,6 +53,28 @@ class Character {
     moveDown() {
         this.y += this.speed;
     }
+    
+    takeDamage(amount) {
+        if (this.isInvulnerable) return;
+        
+        this.health = Math.max(0, this.health - amount);
+        this.isInvulnerable = true;
+        
+        // Hacer al personaje invulnerable por 1 segundo (60 frames)
+        setTimeout(() => {
+            this.isInvulnerable = false;
+        }, 1000);
+        
+        // Actualizar la barra de vida
+        if (this === window.player) {
+            const playerBar = document.getElementById('player-health-bar');
+            if (playerBar) {
+                playerBar.style.width = `${this.health}%`;
+            }
+        }
+        
+        return this.health > 0;
+    }
 
     attack() {
         const currentTime = Date.now();
@@ -68,7 +90,8 @@ class Character {
                 window.mouseX, 
                 window.mouseY, 
                 2, 
-                '#00ff00'
+                '#00ff00',
+                'player'
             );
             this.bullets.push(bullet);
             this.lastShotTime = currentTime;
@@ -99,6 +122,10 @@ class Character {
             }
         });
 
+        // Guardar la última posición del jugador
+        window.lastPlayerX = this.x + this.width/2;
+        window.lastPlayerY = this.y + this.height/2;
+
         if (this.isInvulnerable) {
             this.invulnerabilityFrames--;
             if (this.invulnerabilityFrames <= 0) {
@@ -112,22 +139,39 @@ class Character {
 
 // Clase Bullet
 class Bullet {
-    constructor(x, y, targetX, targetY, damage, color) {
+    constructor(x, y, targetX, targetY, damage, color, owner) {
+        this.owner = owner; // 'player' o 'enemy'
         this.x = x;
         this.y = y;
         this.targetX = targetX;
         this.targetY = targetY;
         this.damage = damage;
         this.color = color;
-        this.size = 3;
+        this.size = 10;  // Aumentado de 3 a 10 píxeles
         this.isDead = false;
         
         // Calcular dirección hacia el objetivo
         const dx = targetX - x;
         const dy = targetY - y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        this.speedX = dx / distance * 5; // Velocidad base de 5
-        this.speedY = dy / distance * 5;
+        
+        // Velocidad diferente según el dueño de la bala
+        let speed;
+        if (owner === 'player') {
+            speed = 10;  // Velocidad para balas del jugador
+        } else {
+            speed = 4;   // Velocidad más lenta para balas del enemigo
+        }
+        
+        this.speedX = dx / distance * speed;
+        this.speedY = dy / distance * speed;
+        
+        console.log('Nueva bala:', {
+            from: {x, y},
+            to: {targetX, targetY},
+            speed: {x: this.speedX, y: this.speedY},
+            owner: this.owner
+        });
     }
 
     isDead() {
@@ -152,26 +196,51 @@ class Bullet {
     }
 
     draw(ctx) {
-        console.log('Dibujando bala en:', this.x, this.y);
-        ctx.fillStyle = this.color;
+        console.log('Dibujando bala en:', this.x, this.y, 'Color:', this.color);
+        
+        // Dibujar círculo exterior (borde)
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size + 2, 0, Math.PI * 2);
+        ctx.fillStyle = 'black';
+        ctx.fill();
+        
+        // Dibujar círculo interior (color principal)
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
         ctx.fill();
+        
+        // Dibujar línea de trayectoria (solo para depuración)
+        ctx.strokeStyle = 'rgba(255, 255, 0, 0.3)';
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.targetX, this.targetY);
+        ctx.stroke();
     }
 
     checkHit(target) {
-        const dx = this.x - (target.x + target.width / 2);
-        const dy = this.y - (target.y + target.height / 2);
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        return distance < this.size + target.width / 2;
+        const hit = (
+            this.x > target.x &&
+            this.x < target.x + target.width &&
+            this.y > target.y &&
+            this.y < target.y + target.height
+        );
+        
+        if (hit) {
+            // Solo aplicar daño si el dueño de la bala es diferente al objetivo
+            if ((this.owner === 'player' && target === window.enemy) ||
+                (this.owner === 'enemy' && target === window.player)) {
+                return true;
+            }
+        }
+        return false;
     }
-
+    
     isDead() {
-        return this.isDead || 
-               this.x < 0 || 
-               this.x > window.canvas.width ||
-               this.y < 0 || 
-               this.y > window.canvas.height;
+        return this.x < -this.size || 
+               this.x > window.canvas.width + this.size ||
+               this.y < -this.size || 
+               this.y > window.canvas.height + this.size;
     }
 }
 
